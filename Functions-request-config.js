@@ -44,13 +44,8 @@ const requestConfig = {
   walletPrivateKey: process.env["PRIVATE_KEY"],
   // args (string only array) can be accessed within the source code with `args[index]` (ie: args[0]).
   args: [
-    "GET", // AWS request method
-    "api-fulfill.dataexchange.us-east-1.amazonaws.com", // Host of AWS service
-    "/v1/currencies/eur/jpy.json", // Data provider API URL. Query params should be part of URL
-    "us-east-1", // AWS service region
-    "dataexchange", // AWS service name
-    "", // request BODY payload. empty string for GET or empty BODY
-    "jpy" // one level result path
+    "gbp",
+    "usd"
   ],
   // expected type of the returned value
   expectedReturnType: ReturnType.string,

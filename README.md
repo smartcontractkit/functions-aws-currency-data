@@ -1,47 +1,45 @@
-# Chainlink Functions Starter Kit
+# Chainlink Functions <>  Amazon Web Services Data Exchange Sample Application
 
-- [Chainlink Functions Starter Kit](#chainlink-functions-starter-kit)
-- [Overview](#overview)
-- [Quickstart](#quickstart)
-- [Command Glossary](#command-glossary)
-  - [Functions Commands](#functions-commands)
-  - [Functions Subscription Management Commands](#functions-subscription-management-commands)
-  - [Admin Commands](#admin-commands)
-- [Request Configuration](#request-configuration)
-  - [JavaScript Code](#javascript-code)
-    - [Functions Library](#functions-library)
-  - [Modifying Contracts](#modifying-contracts)
-  - [Simulating Requests](#simulating-requests)
-  - [Off-chain Secrets](#off-chain-secrets)
+This use case involves creating a universal connector Chainlink Function that can be used to connect to any [AWS Data Exchange data](https://aws.amazon.com/data-exchange/), allowing developers to seamlessly integrate third-party data in AWS together with smart contracts. This enables the creation of advanced Web3 applications that can make use of the vast array of data sets available in AWS.
 
-# Overview
+In this specific example, the universal connector will be used to connect and obtain currency exchange data from the [Rearc Currency Exchange API](https://aws.amazon.com/marketplace/pp/prodview-eufl3hymozfae?sr=0-1&ref_=beagle&applicationId=AWSMPContessa#offers), then return the data to an on-chain smart contract.
 
-<p>Chainlink Functions allows users to request data from almost any API and perform custom computation using JavaScript.</p>
-<p>It works by using a <a href="https://chain.link/education/blockchain-oracles#decentralized-oracles">decentralized oracle network</a> (DON).<br>When a request is initiated, each node in the DON executes the user-provided JavaScript code simultaneously.  Then, nodes use the <a href="https://docs.chain.link/architecture-overview/off-chain-reporting/">Chainlink OCR</a> protocol to come to consensus on the results.  Finally, the median result is returned to the requesting contract via a callback function.</p>
-<p>Chainlink Functions also enables users to share encrypted secrets with each node in the DON.  This allows users to access to APIs that require authentication, without exposing their API keys to the general public.
 
-# Quickstart
+Chainlink Functions allows users to request data from almost any API and perform custom computation using JavaScript. This project is currently in a closed beta. Request access to use Chainlink Functions at https://functions.chain.link
+
 
 ## Requirements
 
-- Node.js version [18.0](https://nodejs.org/en/download/) or greater
+- Node.js version [18](https://nodejs.org/en/download/)
 
-## Steps
+## Instructions to run this sample
 
-1. Clone this repository to your local machine
-2. Open this directory in your command line, then run `npm install` to install all dependencies.<br><br>
-3. Set the required environment variables.
-   1. This can be done by renaming the file `.env.example` to `.env` (this renaming is important so that it does not get checked in with git!) and then changing the following values:
-      a. `PRIVATE_KEY` for your development wallet.
-      b. One of either `GOERLI_RPC_URL`, `MUMBAI_RPC_URL` or `SEPOLIA_RPC_URL` for the network that you intend to use.
-   2. If desired, the `REPORT_GAS`, `ETHERSCAN_API_KEY` and `POLYGONSCAN_API_KEY` can also be set in order to verify contracts, along with any values used in the `secrets` object in `Functions-request-config.js`.<br><br>
-4. There are two files to notice that the default example will use:
-   a. `contracts/FunctionsConsumer.sol` contains the smart contract that will receive the data.
-   b. `Functions-request-source-calculation-example.js` contains JavaScript code that will be executed by each node of the DON.
-5. Test an end-to-end request and fulfillment to this contract locally by simulating it using:<br>`npx hardhat functions-simulate`<br><br>
-6. Deploy and verify the consuming contract to an actual blockchain network by running:<br>`npx hardhat functions-deploy-client --network network_name_here --verify true`<br>**Note**: Make sure `ETHERSCAN_API_KEY` or `POLYGONSCAN_API_KEY` are set if using `--verify true`, depending on which network is used.<br><br>
-7. Create, fund & authorize a new Functions billing subscription by running:<br> `npx hardhat functions-sub-create --network network_name_here --amount LINK_funding_amount_here --contract 0xDeployed_client_contract_address_here`<br>**Note**: Ensure your wallet has a sufficient LINK balance before running this command.<br><br>
-8. Make an on-chain request by running:<br>`npx hardhat functions-request --network network_name_here --contract 0xDeployed_client_contract_address_here --subid subscription_id_number_here`
+1. If you don't already have one, sign up for an account at [AWS](https://aws.amazon.com/) (you can use a free-tier)
+2. Subscribe to the [Currency Exchange API](https://aws.amazon.com/marketplace/pp/prodview-eufl3hymozfae?sr=0-1&ref_=beagle&applicationId=AWSMPContessa#offers)  Rearc data provider
+3. Clone this repository to your local machine<br>
+4. Open this directory in your command line, then run `npm install` to install all dependencies.<br>
+5. Set the required environment variables.
+   1. This can be done by copying the file *.env.example* to a new file named *.env*. (This renaming is important so that it won't be tracked by Git.) Then, change the following values:
+      - *PRIVATE_KEY* for your development wallet
+      - *MUMBAI_RPC_URL* or *SEPOLIA_RPC_URL* for the network that you intend to use
+   2. If desired, the *ETHERSCAN_API_KEY* or *POLYGONSCAN_API_KEY* can be set in order to verify contracts, along with any values used in the *secrets* object in *Functions-request-config.js* such as *COINMARKETCAP_API_KEY*.<br><br> 
+   3. In your .env file, you will also need to set the following additional AWS Environment Variables. Please see [this guide](https://docs.aws.amazon.com/powershell/latest/userguide/pstools-appendix-sign-up.html) for setting up a secret key and access key. To obtain the DataSet ID, Reivion ID and Asset ID, select 'Entitled Data' from the left nativation panel on the AWS Data Exchange console. Choose the Currency Exchange API | Rearc, and then choose the Currency Exchange API | Rearc data set. Expand the API data set to see the Revisions and API assets. Use the latest revision. Values for Data set ID, Revision ID, and Asset ID are located in the Asset overview section<br>
+
+   
+   ```    
+     SECRET_KEY="insert AWS secret key"
+     ACCESS_KEY="insert AWS access key"
+     DATASET_ID="8d76790e3d69d9610a9288aa75069592"
+     REVISION_ID="6ffe379389e039941bbbdaa879b932e2"
+     ASSET_ID="a670e5e4fb46e536e457efc0adcdb310"% 
+    ```
+
+6. Test an end-to-end request and fulfillment locally by simulating it using:<br>`npx hardhat functions-simulate`<br>
+7. Deploy and verify the smart contract to an actual blockchain network by running:<br>`npx hardhat functions-deploy-client --network network_name_here --verify true`<br>**Note**: Make sure *ETHERSCAN_API_KEY* or *POLYGONSCAN_API_KEY* are set if using `--verify true`, depending on which network is used.<br><br> Network_name_here should be replaced with the network you are deploying to (Sepolia or Mumbai) in this step, as well as all steps after this one
+8. Create, fund & authorize a new Functions billing subscription by running:<br> `npx hardhat functions-sub-create --network network_name_here --amount LINK_funding_amount_here --contract 0xDeployed_client_contract_address_here`<br>**Note**: Ensure your wallet has a sufficient LINK balance before running this command.  Testnet LINK can be obtained at <a href="https://faucets.chain.link/">faucets.chain.link</a>.<br><br> A suitable amount of LINK to fund for most requests is 0.5 - 1 LINK. You should replace 0xDeployed_client_contract_address_here with your deployed contract address from the previous step.
+9. Make an on-chain request by running:<br>`npx hardhat functions-request --network network_name_here --contract 0xDeployed_client_contract_address_here --subid subscription_id_number_here`, replacing subscription_id_number_here with the subscription ID you received from the previous step
+10. Read the result in the on-chain smart contract by running :<br>`npx hardhat functions-read --contract 0xDeployed_client_contract_address_here`<br>
+
 
 # Command Glossary
 

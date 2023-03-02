@@ -1,5 +1,12 @@
-// Detailed documentation on how to calculate signature for Authorization Header and make HTTP requests to AWS S3 (applies to AWS Data Exchange also) is available here (https://docs.aws.amazon.com/pdfs/AmazonS3/latest/API/s3-api.pdf#sig-v4-header-based-auth)
 const crypto = require('crypto')
+
+if (!secrets.secretKey || !secrets.accessKey ) {
+  throw Error("AWS secretKey and accessKey are required")
+}
+
+if (!secrets.dataSetID || !secrets.revisionID || !secrets.assetID ) {
+  throw Error("AWS Data Exchange provider data set id, revision id and asset id are required")
+}
 
 /**
  * Formats the date to ISO 8601 basic format.
@@ -42,6 +49,7 @@ const buildSignedHeaders = (withToken = false) => {
  * @returns signature string that should be used in the Authorization header
  */
 const buildSignature  = (method, url, host, secretKey, securityToken, date, payload, region, service) => {
+
   /**
    * Builds encoded and sorted query string from request url
    * @param {string} url - absolute url of the request
@@ -120,7 +128,6 @@ const buildSignature  = (method, url, host, secretKey, securityToken, date, payl
   const queries = buildQueries(`https://api-fulfill.dataexchange.${region}.amazonaws.com${url}`)
   // 2. Use those queries with other requests components to build canonical request string
   const canonicalRequest = buildCanonicalRequest(method, url, host, securityToken, queries, date, payload)
-  console.log({canonicalRequest})
   // 3. create SHA256 hash of canonical request string
   const requestHash = crypto.createHash('sha256').update(canonicalRequest).digest('hex')
   // 4. using that hash create another string that will be signed by signing key
@@ -129,19 +136,16 @@ const buildSignature  = (method, url, host, secretKey, securityToken, date, payl
   return  generateSignatureFromRequest(secretKey, shortDate(date), region, service, stringToSign)
 }
 
-const method = args[0] || 'GET' // Request method for AWS Data Exchange API
-const host =  args[1] // API host of AWS service. for example api-fulfill.dataexchange.us-east-1.amazonaws.com
-const url = args[2] ||'/v1' // Provider API URL to get data. Should always start with '/v1'
-const region = args[3] ||'us-east-1' // AWS Region that the service is located in
+const base = args[0]
+const quote = args[1]
+const method =  'GET' // Request method for AWS Data Exchange API
+const host =  'api-fulfill.dataexchange.us-east-1.amazonaws.com' // API host of AWS service.
+const url = `/v1/currencies/${base}/${quote}.json` // Provider API URL to get data.
+const region = 'us-east-1' // AWS Region that the service is located in
 
 const date = formatToISODate(new Date()) // Current date time formatted to ISO 8601 basic format
-const service = args[4] ||'dataexchange' // Service name
-const payload =  args[5] || '' // Payload (body) for POST/PUT requests. Should be empty string for GET or if there is no BODY
-const resultPath =  args[6] // One level result path to get from response
-
-if (!secrets.secretKey || !secrets.accessKey ) {
-  throw Error("AWS secretKey and accessKey are required")
-}
+const service = 'dataexchange' // Service name
+const payload =   '' // Payload (body) for POST/PUT requests. Should be empty string for GET or if there is no BODY
 
 const signature = buildSignature(method, url, host, secrets.secretKey, secrets.securityToken, date, payload, region, service)
 
@@ -162,4 +166,6 @@ if (secrets.securityToken) {
 
 const response = await Functions.makeHttpRequest(config)
 
-return Functions.encodeString(response.data[resultPath || ''].toString())
+const price = Math.round(response.data[quote] * 100)
+
+return Functions.encodeUint256(price)

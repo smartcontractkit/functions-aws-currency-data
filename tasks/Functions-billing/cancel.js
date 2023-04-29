@@ -1,4 +1,4 @@
-const { VERIFICATION_BLOCK_CONFIRMATIONS, networkConfig } = require("../../network-config")
+const { networks } = require("../../networks")
 
 task(
   "functions-sub-cancel",
@@ -17,8 +17,10 @@ task(
     const subscriptionId = taskArgs.subid
     const refundAddress = taskArgs.refundAddress ?? (await ethers.getSigners())[0].address
 
-    const RegistryFactory = await ethers.getContractFactory("FunctionsBillingRegistry")
-    const registry = await RegistryFactory.attach(networkConfig[network.name]["functionsOracleRegistry"])
+    const RegistryFactory = await ethers.getContractFactory(
+      "contracts/dev/functions/FunctionsBillingRegistry.sol:FunctionsBillingRegistry"
+    )
+    const registry = await RegistryFactory.attach(networks[network.name]["functionsBillingRegistryProxy"])
 
     // Check that the subscription is valid
     let preSubInfo
@@ -46,8 +48,8 @@ task(
     const cancelTx = await registry.cancelSubscription(subscriptionId, refundAddress)
 
     console.log(
-      `Waiting ${VERIFICATION_BLOCK_CONFIRMATIONS} blocks for transaction ${cancelTx.hash} to be confirmed...`
+      `Waiting ${networks[network.name].confirmations} blocks for transaction ${cancelTx.hash} to be confirmed...`
     )
-    await cancelTx.wait(VERIFICATION_BLOCK_CONFIRMATIONS)
+    await cancelTx.wait(networks[network.name].confirmations)
     console.log(`\nSubscription ${subscriptionId} cancelled.`)
   })

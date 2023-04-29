@@ -13,6 +13,9 @@ typechain
 # don't push the environment vars!
 .env
 
+# These environment variables are encrypted, but should not be pushed unless a secure password is used
+.env.enc
+
 # Built application files
 .DS*
 *.apk
@@ -104,3 +107,9 @@ contracts/test/fuzzing/crytic-export
 
 Functions-request.json
 offchain-secrets.json
+
+# OpenZeppelin Upgrades local network artifacts
+.openzeppelin
+
+# Chainlink Functions request artifacts
+.chainlink_functions

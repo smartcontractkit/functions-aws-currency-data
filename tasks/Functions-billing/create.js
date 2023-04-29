@@ -1,4 +1,4 @@
-const { VERIFICATION_BLOCK_CONFIRMATIONS, networkConfig } = require("../../network-config")
+const { networks } = require("../../networks")
 
 task("functions-sub-create", "Creates a new billing subscription for Functions consumer contracts")
   .addOptionalParam("amount", "Initial amount used to fund the subscription in LINK")
@@ -13,24 +13,26 @@ task("functions-sub-create", "Creates a new billing subscription for Functions c
     const linkAmount = taskArgs.amount
     const consumer = taskArgs.contract
 
-    const RegistryFactory = await ethers.getContractFactory("FunctionsBillingRegistry")
-    const registry = await RegistryFactory.attach(networkConfig[network.name]["functionsOracleRegistry"])
+    const RegistryFactory = await ethers.getContractFactory(
+      "contracts/dev/functions/FunctionsBillingRegistry.sol:FunctionsBillingRegistry"
+    )
+    const registry = await RegistryFactory.attach(networks[network.name]["functionsBillingRegistryProxy"])
 
     // TODO: Remove the following 6 lines on open access
-    const Oracle = await ethers.getContractFactory("FunctionsOracle")
-    const oracle = await Oracle.attach(networkConfig[network.name]["functionsOracle"])
+    const Oracle = await ethers.getContractFactory("contracts/dev/functions/FunctionsOracle.sol:FunctionsOracle")
+    const oracle = await Oracle.attach(networks[network.name]["functionsOracleProxy"])
     const isWalletAllowed = await oracle.isAuthorizedSender((await ethers.getSigner()).address)
 
     if (!isWalletAllowed)
       return console.log(
-        "\nChainlink Functions is currently in a closed testing phase.\nFor access sign up here:\nhttps://chainlinkcommunity.typeform.com/requestaccess"
+        "\nChainlink Functions is currently in a closed testing phase.\nFor access sign up here:\nhttps://functions.chain.link"
       )
 
     console.log("Creating Functions billing subscription")
     const createSubscriptionTx = await registry.createSubscription()
 
-    // If a consumer or linkAmount was also specified, wait 1 block instead of VERIFICATION_BLOCK_CONFIRMATIONS blocks
-    const createWaitBlockConfirmations = consumer || linkAmount ? 1 : VERIFICATION_BLOCK_CONFIRMATIONS
+    // If a consumer or linkAmount was also specified, wait 1 block instead of networks[network.name].confirmations blocks
+    const createWaitBlockConfirmations = consumer || linkAmount ? 1 : networks[network.name].confirmations
     console.log(
       `Waiting ${createWaitBlockConfirmations} blocks for transaction ${createSubscriptionTx.hash} to be confirmed...`
     )
@@ -45,7 +47,7 @@ task("functions-sub-create", "Creates a new billing subscription for Functions c
       const juelsAmount = ethers.utils.parseUnits(linkAmount)
 
       const LinkTokenFactory = await ethers.getContractFactory("LinkToken")
-      const linkToken = await LinkTokenFactory.attach(networkConfig[network.name]["linkToken"])
+      const linkToken = await LinkTokenFactory.attach(networks[network.name]["linkToken"])
 
       const accounts = await ethers.getSigners()
       const signer = accounts[0]
@@ -62,12 +64,12 @@ task("functions-sub-create", "Creates a new billing subscription for Functions c
 
       console.log(`Funding with ${ethers.utils.formatEther(juelsAmount)} LINK`)
       const fundTx = await linkToken.transferAndCall(
-        networkConfig[network.name]["functionsOracleRegistry"],
+        networks[network.name]["functionsBillingRegistryProxy"],
         juelsAmount,
         ethers.utils.defaultAbiCoder.encode(["uint64"], [subscriptionId])
       )
-      // If a consumer was also specified, wait 1 block instead of VERIFICATION_BLOCK_CONFIRMATIONS blocks
-      const fundWaitBlockConfirmations = !!consumer ? 1 : VERIFICATION_BLOCK_CONFIRMATIONS
+      // If a consumer was also specified, wait 1 block instead of networks[network.name].confirmations blocks
+      const fundWaitBlockConfirmations = !!consumer ? 1 : networks[network.name].confirmations
       console.log(`Waiting ${fundWaitBlockConfirmations} blocks for transaction ${fundTx.hash} to be confirmed...`)
       await fundTx.wait(fundWaitBlockConfirmations)
 
@@ -78,8 +80,10 @@ task("functions-sub-create", "Creates a new billing subscription for Functions c
       // Add consumer
       console.log(`Adding consumer contract address ${consumer} to subscription ${subscriptionId}`)
       const addTx = await registry.addConsumer(subscriptionId, consumer)
-      console.log(`Waiting ${VERIFICATION_BLOCK_CONFIRMATIONS} blocks for transaction ${addTx.hash} to be confirmed...`)
-      await addTx.wait(VERIFICATION_BLOCK_CONFIRMATIONS)
+      console.log(
+        `Waiting ${networks[network.name].confirmations} blocks for transaction ${addTx.hash} to be confirmed...`
+      )
+      await addTx.wait(networks[network.name].confirmations)
 
       console.log(`Authorized consumer contract: ${consumer}`)
     }

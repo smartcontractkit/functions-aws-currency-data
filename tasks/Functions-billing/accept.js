@@ -1,4 +1,4 @@
-const { VERIFICATION_BLOCK_CONFIRMATIONS, networkConfig } = require("../../network-config")
+const { networks } = require("../../networks")
 
 task("functions-sub-accept", "Accepts ownership of an Functions subscription after a transfer is requested")
   .addParam("subid", "Subscription ID")
@@ -9,8 +9,10 @@ task("functions-sub-accept", "Accepts ownership of an Functions subscription aft
 
     const subscriptionId = taskArgs.subid
 
-    const RegistryFactory = await ethers.getContractFactory("FunctionsBillingRegistry")
-    const registry = await RegistryFactory.attach(networkConfig[network.name]["functionsOracleRegistry"])
+    const RegistryFactory = await ethers.getContractFactory(
+      "contracts/dev/functions/FunctionsBillingRegistry.sol:FunctionsBillingRegistry"
+    )
+    const registry = await RegistryFactory.attach(networks[network.name]["functionsBillingRegistryProxy"])
 
     // Check that the subscription is valid
     let preSubInfo
@@ -28,9 +30,9 @@ task("functions-sub-accept", "Accepts ownership of an Functions subscription aft
       console.log(`Accepting ownership of subscription ${subscriptionId}`)
       const acceptTx = await registry.acceptSubscriptionOwnerTransfer(subscriptionId)
       console.log(
-        `Waiting ${VERIFICATION_BLOCK_CONFIRMATIONS} blocks for transaction ${acceptTx.hash} to be confirmed...`
+        `Waiting ${networks[network.name].confirmations} blocks for transaction ${acceptTx.hash} to be confirmed...`
       )
-      await acceptTx.wait(VERIFICATION_BLOCK_CONFIRMATIONS)
+      await acceptTx.wait(networks[network.name].confirmations)
     } catch (error) {
       console.log(
         `\nFailed to accept ownership. Ensure that a transfer has been requested by the previous owner ${preSubInfo[1]}`

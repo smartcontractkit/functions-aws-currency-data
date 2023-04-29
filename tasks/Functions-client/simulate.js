@@ -4,7 +4,7 @@ const {
   getDecodedResultLog,
   getRequestConfig,
 } = require("../../FunctionsSandboxLibrary")
-const { networkConfig } = require("../../network-config")
+const { networks, SHARED_DON_PUBLIC_KEY } = require("../../networks")
 
 task("functions-simulate", "Simulates an end-to-end fulfillment locally for the FunctionsConsumer contract")
   .addOptionalParam(
@@ -36,9 +36,9 @@ task("functions-simulate", "Simulates an end-to-end fulfillment locally for the 
 
     const accounts = await ethers.getSigners()
     const deployer = accounts[0]
-    // Add the wallet initiating the request to the oracle whitelist
-    const whitelistTx = await oracle.addAuthorizedSenders([deployer.address])
-    await whitelistTx.wait(1)
+    // Add the wallet initiating the request to the oracle allowlist to authorize a simulated fulfillment
+    const allowlistTx = await oracle.addAuthorizedSenders([deployer.address])
+    await allowlistTx.wait(1)
 
     // Create & fund a subscription
     const createSubscriptionTx = await registry.createSubscription()
@@ -54,9 +54,9 @@ task("functions-simulate", "Simulates an end-to-end fulfillment locally for the 
     await registry.addConsumer(subscriptionId, client.address)
 
     // Build the parameters to make a request from the client contract
-    const requestConfig = require("../../Functions-request-config.js")
-    const validatedRequestConfig = getRequestConfig(requestConfig)
-    // Fetch the DON public key from on-chain
+    const unvalidatedRequestConfig = require("../../Functions-request-config.js")
+    const requestConfig = getRequestConfig(unvalidatedRequestConfig)
+    // Fetch the mock DON public key
     const DONPublicKey = await oracle.getDONPublicKey()
     // Remove the preceding 0x from the DON public key
     requestConfig.DONPublicKey = DONPublicKey.slice(2)
@@ -69,7 +69,6 @@ task("functions-simulate", "Simulates an end-to-end fulfillment locally for the 
       const requestTx = await clientContract.executeRequest(
         request.source,
         request.secrets ?? [],
-        validatedRequestConfig.secretsLocation,
         request.args ?? [],
         subscriptionId,
         gasLimit
@@ -80,25 +79,6 @@ task("functions-simulate", "Simulates an end-to-end fulfillment locally for the 
 
       // Simulating the JavaScript code locally
       console.log("\nExecuting JavaScript request source code locally...")
-      const unvalidatedRequestConfig = require("../../Functions-request-config.js")
-      const requestConfig = getRequestConfig(unvalidatedRequestConfig)
-
-      if (requestConfig.secretsLocation === 1) {
-        requestConfig.secrets = undefined
-
-        if (!requestConfig.globalOffchainSecrets || Object.keys(requestConfig.globalOffchainSecrets).length === 0) {
-          console.log("Using secrets assigned to the first node as no global secrets were provided")
-          if (
-            requestConfig.perNodeOffchainSecrets &&
-            requestConfig.perNodeOffchainSecrets[0] &&
-            Object.keys(requestConfig.perNodeOffchainSecrets[0]).length > 0
-          ) {
-            requestConfig.secrets = requestConfig.perNodeOffchainSecrets[0]
-          }
-        } else {
-          requestConfig.secrets = requestConfig.globalOffchainSecrets
-        }
-      }
 
       const { success, result, resultLog } = await simulateRequest(requestConfig)
       console.log(`\n${resultLog}`)
@@ -203,40 +183,43 @@ const getGasUsedForFulfillRequest = async (success, result) => {
 }
 
 const deployMockOracle = async () => {
-  // Deploy a mock LINK token contract
+  // Deploy mocks: LINK token & LINK/ETH price feed
   const linkTokenFactory = await ethers.getContractFactory("LinkToken")
+  const linkPriceFeedFactory = await ethers.getContractFactory("MockV3Aggregator")
   const linkToken = await linkTokenFactory.deploy()
-  const linkEthFeedAddress = networkConfig["hardhat"]["linkEthPriceFeed"]
-  // Deploy the mock oracle factory contract
-  const oracleFactoryFactory = await ethers.getContractFactory("FunctionsOracleFactory")
-  const oracleFactory = await oracleFactoryFactory.deploy()
-  await oracleFactory.deployTransaction.wait(1)
-  // Deploy the mock oracle contract
-  const accounts = await ethers.getSigners()
-  const deployer = accounts[0]
-  const OracleDeploymentTransaction = await oracleFactory.deployNewOracle()
-  const OracleDeploymentReceipt = await OracleDeploymentTransaction.wait(1)
-  const FunctionsOracleAddress = OracleDeploymentReceipt.events[1].args.don
-  const oracle = await ethers.getContractAt("FunctionsOracle", FunctionsOracleAddress, deployer)
-  // Accept ownership of the mock oracle contract
-  const acceptTx = await oracle.acceptOwnership()
-  await acceptTx.wait(1)
+  const linkPriceFeed = await linkPriceFeedFactory.deploy(0, ethers.BigNumber.from(5021530000000000))
+  // Deploy proxy admin
+  await upgrades.deployProxyAdmin()
+  // Deploy the oracle contract
+  const oracleFactory = await ethers.getContractFactory("contracts/dev/functions/FunctionsOracle.sol:FunctionsOracle")
+  const oracleProxy = await upgrades.deployProxy(oracleFactory, [], {
+    kind: "transparent",
+  })
+  await oracleProxy.deployTransaction.wait(1)
   // Set the secrets encryption public DON key in the mock oracle contract
-  await oracle.setDONPublicKey("0x" + networkConfig["hardhat"]["functionsPublicKey"])
+  await oracleProxy.setDONPublicKey("0x" + SHARED_DON_PUBLIC_KEY)
   // Deploy the mock registry billing contract
-  const registryFactory = await ethers.getContractFactory("FunctionsBillingRegistry")
-  const registry = await registryFactory.deploy(linkToken.address, linkEthFeedAddress, FunctionsOracleAddress)
-  await registry.deployTransaction.wait(1)
+  const registryFactory = await ethers.getContractFactory(
+    "contracts/dev/functions/FunctionsBillingRegistry.sol:FunctionsBillingRegistry"
+  )
+  const registryProxy = await upgrades.deployProxy(
+    registryFactory,
+    [linkToken.address, linkPriceFeed.address, oracleProxy.address],
+    {
+      kind: "transparent",
+    }
+  )
+  await registryProxy.deployTransaction.wait(1)
   // Set registry configuration
   const config = {
-    maxGasLimit: 400_000,
+    maxGasLimit: 300_000,
     stalenessSeconds: 86_400,
-    gasAfterPaymentCalculation: 21_000 + 5_000 + 2_100 + 20_000 + 2 * 2_100 - 15_000 + 7_315,
+    gasAfterPaymentCalculation: 39_173,
     weiPerUnitLink: ethers.BigNumber.from("5000000000000000"),
-    gasOverhead: 100_000,
+    gasOverhead: 519_719,
     requestTimeoutSeconds: 300,
   }
-  await registry.setConfig(
+  await registryProxy.setConfig(
     config.maxGasLimit,
     config.stalenessSeconds,
     config.gasAfterPaymentCalculation,
@@ -245,7 +228,9 @@ const deployMockOracle = async () => {
     config.requestTimeoutSeconds
   )
   // Set the current account as an authorized sender in the mock registry to allow for simulated local fulfillments
-  await registry.setAuthorizedSenders([oracle.address, deployer.address])
-  await oracle.setRegistry(registry.address)
-  return { oracle, registry, linkToken }
+  const accounts = await ethers.getSigners()
+  const deployer = accounts[0]
+  await registryProxy.setAuthorizedSenders([oracleProxy.address, deployer.address])
+  await oracleProxy.setRegistry(registryProxy.address)
+  return { oracle: oracleProxy, registry: registryProxy, linkToken }
 }

@@ -48,7 +48,7 @@ const requestConfig = {
     "usd"
   ],
   // expected type of the returned value
-  expectedReturnType: ReturnType.string,
+  expectedReturnType: ReturnType.int256,
   // Redundant URLs which point to encrypted off-chain secrets
   secretsURLs: [],
 }

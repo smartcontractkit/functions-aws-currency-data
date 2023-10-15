@@ -31,18 +31,17 @@ async function promptTxCost(gasEstimate, hre, skipPrompt = false) {
   const { lastBaseFeePerGas, maxPriorityFeePerGas } = await hre.ethers.provider.getFeeData()
 
   const transactionEstimateNative = hre.ethers.utils.formatUnits(
-    gasEstimate.mul(maxPriorityFeePerGas.add(lastBaseFeePerGas)),
-    network.config.nativeCurrencyDecimals
+    gasEstimate.mul(maxPriorityFeePerGas.add(lastBaseFeePerGas))
   )
   const signer = await hre.ethers.getSigner()
-  const nativePriceUSD = await getPriceUSD(network.config.nativePriceFeed, hre.ethers)
+  const nativePriceUSD = await getPriceUSD(network.config.linkPriceFeed, hre.ethers)
   const transactionEstimateUSD = transactionEstimateNative * nativePriceUSD
 
   console.log(`Estimating cost if the current gas price remains the same...\n`)
 
   console.log(`The transaction to initiate this request will charge the wallet (${signer.address}):`)
   console.log(
-    `${chalk.blue(transactionEstimateNative + " " + network.config.nativeCurrencySymbol)}, which ${
+    `${chalk.blue(transactionEstimateNative + " ETH")}, which ${
       network.config.mainnet ? "" : "(using mainnet value) "
     }is $${transactionEstimateUSD}\n`
   )
